@@ -2,7 +2,7 @@
 
 n=`grep CNF examples/prot.gro | grep NH | awk '{print $3}'`
 c=`grep CNF examples/prot.gro | grep CT | awk '{print $3}'`
-time ./new_g_nitrile_hbond -f examples/prot.gro \
+time ./g_nitrile_hbond -f examples/prot.gro \
     -s examples/v4.tpr \
     -a1 $c \
     -a2 $n \

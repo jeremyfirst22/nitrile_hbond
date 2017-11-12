@@ -7,7 +7,7 @@
 # $ make -f Makefile.pkg
 #
 #change the name of the program here
-NAME=new_g_nitrile_hbond
+NAME=g_nitrile_hbond
 
 #add extra c file to compile here
 #EXTRA_SRC=$(wildcard *.cpp)
