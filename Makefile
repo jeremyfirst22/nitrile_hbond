@@ -41,6 +41,9 @@ $(NAME): $(OBJS)
 %.o: %.cpp
 	$(CC) $(LDFLAGS) $(CPPFLAGS) -c $<
 
+test:
+	bash test.sh 
+
 clobber:
 	rm -f $(wildcard *.o) 
 

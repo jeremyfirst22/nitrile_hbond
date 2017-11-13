@@ -64,7 +64,7 @@ typedef struct
     std::vector<int>                    p_water; // numer of persistent waters per water molecule
     std::vector<int>                    p_hbonds; // number of persisten hbonds per water molecule
     std::vector<t_water>                water;
-    std::vector<t_water>                prot ;
+    std::vector<t_prot>                 prot ;
     std::vector<int>                    frame_sigma_nhb;
     std::vector<int>                    frame_pi_nhb;
     std::vector<int>                    frame_lQ_nhb;
