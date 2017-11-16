@@ -35,7 +35,7 @@ extern "C"
 struct t_mol
 {
     int resid;
-    int is_hb;
+    bool is_hb; 
     float nh;
     float cnh;
     float nho;
@@ -49,43 +49,55 @@ typedef std::vector<t_mol> t_prot ;
  */
 typedef struct
 {
+    float                               cr ; 
+    float                               r  ; 
+    float                               nho; 
+    float                               cnh; 
+} t_cutoffs ; 
+
+typedef struct
+{
     gmx_ana_selection_t                 *refsel;
     FILE                                *fp;
     FILE                                *fpp;
     FILE                                *fpa;
     FILE                                *fpg;
-//    FILE                                *fpnw;/*non-water frames*/
-    FILE                                *fpnwg;/*non-water geometry*/ 
-    int                                 framen;
-    int                                 a1, a2;
-    int                                 nhb; //total number of hbonds?
-    int                                 nwater; //
-    int                                 nprot ;
-    std::vector<int>                    p_water; // numer of persistent waters per water molecule
-    std::vector<int>                    p_hbonds; // number of persisten hbonds per water molecule
-    std::vector<t_water>                water;
-    std::vector<t_prot>                 prot ;
-    std::vector<int>                    frame_sigma_nhb;
-    std::vector<int>                    frame_pi_nhb;
-    std::vector<int>                    frame_lQ_nhb;
-    std::vector<int>                    frame_prot_nhb;
-    float                               cr;
-    float                               r;
-    float                               cnh;
-    float                               nho;
+    FILE                                *fpnwg;                 //non-water geometry   
+
+    int                                 framen;                 //number of frames 
+    int                                 a1, a2;                 //indices of C and N, respectively, for nitrile
+    int                                 nhb;                    //total number of hbonds 
+    int                                 nwater;                 //number of hbonds to water
+    int                                 nprot ;                 //number of hbonds to protein 
+
+    std::vector<int>                    p_water;                //number of persistent waters
+    std::vector<int>                    p_hbonds;               //number of persistent hbonds from water 
+    std::vector<int>                    p_prot_hb;              //number of persistent hbonds from protein
+
+    std::vector<t_water>                water;                  //vector of mol objects for each nearby water 
+    std::vector<t_water>                water_hb;               //vector of mol objects for each hbonding water
+    std::vector<t_prot>                 prot ;                  //vector of mol objects for each hbonding protein 
+
+    std::vector<int>                    frame_sigma_nhb;        //number of Cho sigma water hbonds for each frame
+    std::vector<int>                    frame_pi_nhb;           //number of Cho pi water hbonds for each frame
+    std::vector<int>                    frame_lQ_nhb;           //number of LQ water hbonds for each frame  
+    std::vector<int>                    frame_prot_nhb;         //number of protein water hbonds for each frame 
+    std::vector<int>                    frame_totnhb;           //number of all hbonds for each frame 
+
+    t_cutoffs                           cutoffs ; 
     bool                                bVerbose;
-    bool                                doPersistent, doLog, doGeo;
+    bool                                doPersistent, doLog, doWatGeo,doProtGeo;
 } t_analysisdata;
 
-int parse_water(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, const float &r, t_mol &mol);
+bool parse_water(const float *a1, const float *a2, const float *ow, const float *h1, const float* h2, t_cutoffs cutoffs, t_mol &mol);
 
-int parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, const float &r, t_mol &mol);
+bool parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, t_cutoffs cutoffsr, t_mol &mol);
 
-int parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, const float &r, t_mol &mol);
+bool parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, t_cutoffs cutoffs, t_mol &mol);
 
-int parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, const float *h3, const float &r, t_mol &mol);
+bool parse_Hs(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, const float *h3, t_cutoffs cutoffs, t_mol &mol);
 
-//int parse_nonwater(const float *a1, const float *a2, const float *n, const float *h, const float &r, t_mol &mol) ; 
+int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int> &persistant) ; 
 
 void vsub( const float *a1, const float *a2, const int &size, float *d );
 

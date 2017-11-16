@@ -48,107 +48,100 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
     t_analysisdata      *d = (t_analysisdata *)data;
     t_water             water;
     t_prot              prot ; 
-    int sigma_nhb = 0, pi_nhb = 0, lQ_nhb = 0, prot_nhb = 0; 
+    t_water             water_hb ; 
+    int sigma_nhb = 0, pi_nhb = 0, lQ_nhb = 0, prot_nhb = 0, totnhb = 0; 
     float a1[3] = { fr->x[d->a1][0], fr->x[d->a1][1], fr->x[d->a1][2] };
     float a2[3] = { fr->x[d->a2][0], fr->x[d->a2][1], fr->x[d->a2][2] };
-    /* Loop through everything */
-    for (int g = 0; g < nr; ++g) { // for each group
+    int atom_ndx ; 
+    int resid ; 
+    char* resname ; 
+    char* atomname ; 
+    t_mol mol;                                        //create mol object 
+    // Loop through everything   
+    for (int g = 0; g < nr; ++g) {                    // for each group
         if (g > 1) {
             fprintf(stderr,"\nwarning: more than 1 group was specified.  cowardly ignoring all additional groups\n");
             break;
         }
-        for (int i = 0; i < sel[g]->p.nr; ++i) { // for each atom in the group
-            int atom_ndx = sel[g]->g->index[i]; // how we get to the atom index
-            /* Get only the water oxygen atoms since we know how water molecules are numbered */
-            int resid = top->atoms.atom[atom_ndx].resind; // increment by +1 to match gro file
-            char *resname = *top->atoms.resinfo[resid].name;
-            if (strncmp(resname, "SOL", 4) == 0 || strncmp(resname, "HOH", 4) == 0)
-            {
-                char *atomname = *top->atoms.atomname[atom_ndx];
-                if (strncmp(atomname, "OW", 3) == 0)
-                {
-                    t_mol mol;
-                    mol.resid = resid;
-                    mol.is_hb = 0;
+        for (int i = 0; i < sel[g]->p.nr; ++i) {      // for each atom in the group
+            mol.is_hb = false ; 
+            mol.resid = resid ; 
+
+            atom_ndx = sel[g]->g->index[i];           // how we get to the atom index
+            resid = top->atoms.atom[atom_ndx].resind; // increment by +1 to match gro file
+            resname = *top->atoms.resinfo[resid].name;
+            atomname = *top->atoms.atomname[atom_ndx];
+            char elem = atomname[0] ; 
+
+            //Water molecules must be either of SOL of HOH 
+            if (strncmp(resname, "SOL", 4) == 0 || strncmp(resname, "HOH", 4) == 0) { 
+                if (strncmp(atomname, "OW", 3) == 0) { 
+                    //Get coords of water atoms
                     float OW[3] = { fr->x[atom_ndx][0], fr->x[atom_ndx][1], fr->x[atom_ndx][2] };
                     float H1[3] = { fr->x[atom_ndx+1][0], fr->x[atom_ndx+1][1], fr->x[atom_ndx+1][2] };
                     float H2[3] = { fr->x[atom_ndx+2][0], fr->x[atom_ndx+2][1], fr->x[atom_ndx+2][2] };
-                    if (parse_water(a1, a2, OW, H1, H2, d->cr, mol))
-                    {
-                        d->nhb++;
-                        if (mol.nh < d->r && mol.cnh > d->cnh && mol.nho > d->nho )
-                        {
-                            if (d->doGeo) {
-                                fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n", d->framen, atom_ndx, 10*mol.nh, mol.cnh, mol.nho);
-                            }
-                            lQ_nhb++;
-                            mol.is_hb++;
+
+                    //parse_water returns true if water is close enough to possible h-bond
+                    if (parse_Hs(a1, a2, OW, H1, H2, d->cutoffs, mol)) { 
+                        if (mol.is_hb) { 
+                            totnhb++;                 //counter for all hydrogen bonds
+                            lQ_nhb++;                 //specifically water hydrogen bonds
+                            water_hb.push_back(mol) ; //add to water hbond array
+                            fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, atom_ndx) ; 
                         }
-                        if (mol.cnh >= 120.)
-                        {
-                            sigma_nhb++;
-                        }
-                        else
-                        {
+                        if (mol.cnh >= 120.) {        //Cho hbonds - only a distance requirement 
+                            sigma_nhb++;              //Decide if these are sigma or pi 
+                        }                             //Note: These do NOT count as actual hbonds, 
+                        else {                        //      this is just to compare against Cho paper
                             pi_nhb++;
                         }
+                        water.push_back(mol);
+                        d->nwater++;
                     }
-                    water.push_back(mol);
                     //fprintf(stdout, "\tAdded water. length of water = %i\n",water.size())  ; 
-                    d->nwater++;
                 }
             }
-            else 
-            {
-                char *atomname = *top->atoms.atomname[atom_ndx]; 
-                //if (strncmp(atomname, "N", 3) == 0) //amide Hydrogens 
-                char elem = atomname[0] ; 
-                if (elem == 'N' || elem == 'O' || elem == 'S' || (strncmp(atomname,"CG",3) == 0 && strncmp(resname,"MET",3) == 0 ) ) //amide Hydrogens 
-                //if (strncmp(atomname, "N", 3) == 0 || strncmp(atomname, "NE2", 3) == 0) //amide Hydrogens 
-                {
-                    //fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resid) ; 
-                    t_mol mol ; 
-                    mol.resid = resid ; 
-                    mol.is_hb = 0; 
+            else { 
+                //Any N, O, S, or CG on Met are the allowed donors as of now. 
+                if (elem == 'N' || elem == 'O' || elem == 'S' || (strncmp(atomname,"CG",3) == 0 && strncmp(resname,"MET",3) == 0 ) ) { 
+    //                fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resid) ; 
                     //fprintf(stdout, "\t\t atom_ndx = %i\n",atom_ndx) ; 
-                    float N[3] = { fr->x[atom_ndx][0], fr->x[atom_ndx][1], fr->x[atom_ndx][2] } ;//xyz coords of Hbond donor  
-                    int maxHs = 3  ; 
+
+                    //Coords of Hbond donor  
+                    float donor[3] = { fr->x[atom_ndx][0], fr->x[atom_ndx][1], fr->x[atom_ndx][2] } ;
+                    int maxHs = 3  ;            //Maximum Hs attached to the donors above is 3. 
                     int countHs = 0 ; 
-                    for (int i = 1 ; i <= maxHs ; i++) {
-                        char *nextAtom = *top->atoms.atomname[atom_ndx+i] ; 
+                    for (countHs = 0 ; countHs < maxHs ; countHs++) {
+                        char *nextAtom = *top->atoms.atomname[atom_ndx+countHs+1] ; 
                         char c = nextAtom[0] ; 
-                        //fprintf(stdout, "\t\tResidue: %s\tAtomname: %s\tElement: %c\n",resname, nextAtom,c) ; 
+    //                    fprintf(stdout, "\t\tResidue: %s\tAtomname: %s\tElement: %c\n",resname, nextAtom,c) ; 
                         if ( c != 'H' ) {
                             //fprintf(stdout, "\t\t\tNot hydrogen, breaking loop\n") ; 
                             break ; 
                         }
-                        countHs++ ; 
-                        //numHs++ ; 
                     }
                     //fprintf(stdout, "%i\n",countHs) ; 
-                    bool hbonding = false ;  
-                    //These are the xyz coords of the next three atoms
-                    //  They may or may not be hydrogens, so we check with the swich blcok below
-                    //    and only call with ones that are. 
+
+                    //These are the xyz coords of the next three atoms, but they may or may not be Hs
                     float H1[3] = { fr->x[atom_ndx+1][0], fr->x[atom_ndx+1][1], fr->x[atom_ndx+1][2] } ;
                     float H2[3] = { fr->x[atom_ndx+2][0], fr->x[atom_ndx+2][1], fr->x[atom_ndx+2][2] } ;
                     float H3[3] = { fr->x[atom_ndx+3][0], fr->x[atom_ndx+3][1], fr->x[atom_ndx+3][2] } ; 
-
                     switch (countHs){
                         case 0 : 
-                            //fprintf(stdout, "This is not a H donor!\n") ; 
+                            //Not an H donor since no Hs attached. 
+    //                        fprintf(stdout,"\t\t\tCase 0\n") ; 
                             break ; 
                         case 1 : 
-                            if (parse_Hs(a1, a2, N, H1, d->cr, mol)) hbonding++ ; 
-                            //fprintf(stdout, "Case 1!\n") ; 
+                            parse_Hs(a1, a2, donor, H1, d->cutoffs, mol) ;  
+    //                        fprintf(stdout,"\t\t\tCase 1\n") ; 
                             break ; 
                         case 2: 
-                            if(parse_Hs(a1, a2, N, H1, H2, d->cr, mol)) hbonding++ ; 
-                            //fprintf(stdout, "Case 2!\n") ; 
+                            parse_Hs(a1, a2, donor, H1, H2, d->cutoffs, mol) ;  
+    //                        fprintf(stdout,"\t\t\tCase 2\n") ; 
                             break ; 
                         case 3: 
-                            if(parse_Hs(a1, a2, N, H1, H2, H3, d->cr, mol)) hbonding++ ; 
-                            //fprintf(stdout, "Case 3!\n") ; 
+                            parse_Hs(a1, a2, donor, H1, H2, H3, d->cutoffs, mol) ;  
+    //                        fprintf(stdout,"\t\t\tCase 3\n") ; 
                             break ; 
                     }
 
@@ -156,155 +149,294 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
                     //fprintf(stdout, "\t\t\tN = %6.4f %6.4f %6.4f\n",N[0],N[1],N[2]) ; 
                     //fprintf(stdout, "\t\t\tH = %6.4f %6.4f %6.4f\n",H[0],H[1],H[2]) ; 
                     //fprintf(stdout, "\tCalling parse_nonwater\n") ; 
-                    if (hbonding) 
-                    {
-                        //fprintf(stdout, "Close enough to hbond!\n") ; 
-                        d->nhb++; 
-                        //fprintf(stdout, "\t\t\tnhb = %i\n",d->nhb) ; 
-                        if (mol.nh < d->r && mol.cnh > d->cnh && mol.nho > d->nho ) //now check hbond reqirements met 
-                        {
-                            //fprintf(stdout,"\t\tHydrogen bonding H found! %s\t%s\t%i\n",atomname, resname, resid) ; 
-                            if (d->doGeo) {
-                                fprintf(d->fpnwg, "%10i %10i %12.4f %12.4f %12.4f\n", d->framen, atom_ndx, 10*mol.nh, mol.cnh, mol.nho); 
-                            }
-                            prot_nhb++; //increment number of hbonds to protein
-                            //fprintf(stdout, "\t\t%i\n",prot_nhb)  ; 
-                            mol.is_hb++; //now true 
-                            prot.push_back(mol); //add molecule to list of nearby protein residues
-                            fprintf(stdout, "\nResidue added\tSize = %i\tmol = %i\tatom = %s\n",prot.size(),mol.resid ,atomname) ; 
-                            d->nprot++; //only add protein to vector if it is hydrogen bonding
-                        }
-                        //else //fprintf(stdout, "Wait no not this one. Angle requirement broken\n\n") ; 
+                    if (mol.is_hb) { 
+                        //if (d->doGeo) {
+                        //    fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n", d->framen, atom_ndx, 10*mol.nh, mol.cnh, mol.nho);
+                        //}
+                        totnhb++;                 //counter for all hydrogen bonds
+                        prot_nhb++ ;              //specifically protein hydrogen bonds
+                        prot.push_back(mol) ;     //add to protein hbond array
+                        //fprintf(stdout, "\n\tFrame: %i  Residue %i is hbonding. Donor is %s\n",d->framen, resid,atomname) ; 
                     }
-                    //fprintf(stdout, "\t\t%i\n",prot_nhb)  ; 
-                            //fprintf(stdout, "\t\t%i\n",d->nprot)  ; 
                 }
             }
         }
     }
     d->water.push_back(water);
+    d->water_hb.push_back(water_hb);
     d->prot.push_back(prot);
-    fprintf(stdout, "\nFrame complete. prot.size() = %i\n",prot.size() ) ; 
+    //fprintf(stdout, "\nFrame complete. prot.size() = %i\n",prot.size() ) ; 
     d->frame_lQ_nhb.push_back(lQ_nhb);
     d->frame_sigma_nhb.push_back(sigma_nhb);
     d->frame_pi_nhb.push_back(pi_nhb);
     d->frame_prot_nhb.push_back(prot_nhb) ;
-    //fprintf(stdout, "\t\tFrame = %i Number Prot Bonds =  %i\n\n",d->framen, d->frame_prot_nhb[d->framen]); 
+    d->frame_totnhb.push_back(totnhb) ;
+    fprintf(stdout, "\n\t\tFrame = %i Total hbonds = %i Prot = %i \n",d->framen,totnhb,prot_nhb) ; 
+    fprintf(stdout, "\t\t\tLQ Water = %i Sigma = %i Pi = %i\n\n", lQ_nhb,sigma_nhb, pi_nhb) ; 
     /* increment the frame number */
     d->framen++;
     /* We need to return 0 to tell that everything went OK */
     return 0;
 }
 
-int parse_water(const float *a1, const float *a2, const float *ow, const float *h1, const float *h2, const float &r, t_mol &mol)
-{
-    float v1 = vlen(a2,h1);
-    float v2 = vlen(a2,h2);
-    float t1 = 0, t2 = 0, d = 0;
-    if (v1 <= r || v2 <= r )
-    {
-        if (v1 < v2)
-        {
-            mol.nh = v1;
-            mol.cnh = vangle(a1,a2,h1);
-            mol.nho = vangle(a2,h1,ow);
-        }
-        else
-        {
-            mol.nh = v2;
-            mol.cnh = vangle(a1,a2,h2);
-            mol.nho = vangle(a2,h2,ow);
-        }
-        return 1;
+int analyze_information(void *data) {
+    t_analysisdata      *d = (t_analysisdata *)data;
+    int maxhb = 6;
+    maxhb++ ;       //It does not make sense to count from zero. 
+
+    //We will use these vectors to count through the number of frames with each number of Hbonds
+    std::vector<int> frames_with_nearbywater(maxhb,0);
+    std::vector<int> frames_with_totnhb (maxhb,0);
+    std::vector<int> frames_with_lQ (maxhb,0);
+    std::vector<int> frames_with_sigma (maxhb,0);
+    std::vector<int> frames_with_pi (maxhb,0);
+    std::vector<int> frames_with_prot (maxhb,0);
+
+    //We will use these vectors to accumulate the persistant hbonds
+    std::vector<int> persistant_water (d->framen,0);
+    std::vector<int> persistant_hb (d->framen,0);
+    std::vector<int> persistant_prothb (d->framen,0);
+
+    //We will use these vectors to count lifetimes of hbonds
+    std::vector<int> total_water (d->framen,0);
+    std::vector<int> total_hb (d->framen,0);
+    std::vector<int> total_prothb (d->framen,0);
+
+    fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    for (int i = 0 ; i < persistant_water.size() ; i++){
+        fprintf(stdout, "%i  ",persistant_water[i]) ; 
     }
-    return 0;
+    fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+    for (int i = 0 ; i < persistant_hb.size() ; i++){
+        fprintf(stdout, "%i  ",persistant_hb[i]) ; 
+    }
+    fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    for (int i = 0 ; i < persistant_prothb.size() ; i++) {
+        fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
+    }
+
+    //Print number hbond information for each frame to a file
+    //    Default = frame_hb.xvg 
+    for (int i=0; i<d->framen; i++) {
+        fprintf(d->fp,"%10i %10i %10i %10i %10i %10i %10i\n",i,d->water[i].size(), d->frame_lQ_nhb[i], d->frame_sigma_nhb[i], d->frame_pi_nhb[i], d->frame_prot_nhb[i], d->frame_totnhb[i]); 
+    }  
+
+    //Analyze number of frames with different number of hbonds
+    //   Default = hb_count.xvg  
+    if (d->doLog) {
+        //Count frames with different number of hbonds. 
+        for (int i = 0; i<d->framen; i++) {
+            for (int j=0; j<maxhb; j++) {
+                if (d->water[i].size() == j) {
+                    frames_with_nearbywater[j] ++; 
+                }
+                if (d->frame_totnhb[i] == j) {
+                    frames_with_totnhb[j] ++; 
+                }
+                if (d->frame_lQ_nhb[i] == j) {
+                    frames_with_lQ[j] ++;
+                }
+                if (d->frame_sigma_nhb[i] == j) {
+                    frames_with_sigma[j] ++;
+                }
+                if (d->frame_pi_nhb[i] == j) {
+                    frames_with_pi[j] ++;
+                }
+                if (d->frame_prot_nhb[i] == j) {
+                    frames_with_prot[j] ++;
+                }
+            }
+        }
+        //Print to file. 
+        for (int i=0;i<maxhb;i++) {
+            fprintf(d->fpa,"%10i %10i %10i %10i %10i %10i %10i\n",i,frames_with_nearbywater[i],frames_with_lQ[i],frames_with_sigma[i],frames_with_pi[i],frames_with_prot[i],frames_with_totnhb[i]);
+        }
+    }
+
+    //Analyze Geometry of each hydrogen-bonding water molecule 
+    //   Default = wat_geometry.xvg 
+    if (d->doWatGeo) {
+        //For each frame
+        for (int i = 0 ; i < d->framen ; i++) { 
+            //For each molecule in each frame
+            for (int j = 0 ; j < d->water_hb[i].size() ; j++) {
+                //Print to file 
+                fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->water_hb[i][j].resid,10*d->water_hb[i][j].nh,d->water_hb[i][j].cnh,d->water_hb[i][j].nho) ; 
+            }
+        }
+    }
+
+    //Analyze Geometry of each hydrogen-bonding protein residue  
+    //   Default = prot_geometry.xvg 
+    if (d->doProtGeo) {
+        //For each frame
+        for (int i = 0 ; i < d->framen ; i++) { 
+            //For each molecule in each frame
+            for (int j = 0 ; j < d->prot[i].size() ; j++) {
+                //Print to file 
+                fprintf(d->fpnwg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->prot[i][j].resid,10*d->prot[i][j].nh,d->prot[i][j].cnh,d->prot[i][j].nho) ; 
+            }
+        }
+    }
+
+    d->doPersistent = true ; 
+    if (d->doPersistent) {
+        fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
+        fprintf(stdout, "\n\t\t\t\td->framen = %i\n\n",d->framen) ; 
+
+        count_persistant(d->water, d->framen, persistant_water) ; 
+        count_persistant(d->water_hb,d->framen,persistant_hb) ; 
+        count_persistant(d->prot,d->framen,persistant_prothb) ; 
+
+        
+    }
+    fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    for (int i = 0 ; i < persistant_water.size() ; i++){
+        fprintf(stdout, "%i  ",persistant_water[i]) ; 
+    }
+    fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+    for (int i = 0 ; i < persistant_hb.size() ; i++){
+        fprintf(stdout, "%i  ",persistant_hb[i]) ; 
+    }
+    fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    for (int i = 0 ; i < persistant_prothb.size() ; i++) {
+        fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
+    }
+    //Accumulate how lifetimes
+    for (int i=0; i<d->framen; i++) {
+        for (int j=i; j<d->framen; j++) {
+            total_water[i] += persistant_water[j];
+            total_hb[i] += persistant_hb[j];
+            total_prothb[i] += persistant_prothb[j] ; 
+        }
+    }
+    // Write to xvg file   
+    for (int i=0; i<d->framen;i++){
+        fprintf(d->fpp,"%10i %10i %10i %10i %10i %10i %10i\n",i,persistant_water[i],persistant_hb[i],persistant_prothb[i],total_water[i], total_hb[i],total_prothb[i]);
+    }
+    return 0 ; 
 }
 
-int parse_nonwater(const float *a1, const float *a2, const float *n, const float *h, const float &r, t_mol &mol) 
-{
-    float v1 = vlen(a2, h) ; 
-    //fprintf(stdout, "\t\tv1 = %4f\t",v1) ; 
-    float t1 = 0, t2 = 0, d = 0; 
-    if (v1 <= r) 
-    {
-        mol.nh = v1 ; 
-        mol.cnh = vangle(a1, a2, h) ; 
-        mol.nho = vangle(a2, h, n) ; 
-        //fprintf(stdout, "Close enough!\n") ; 
-        return 1; 
+int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int>& time_persistant){
+    fprintf(stdout, "\n***Array size = %i***\n\n",mol.size() ) ; 
+    for (int i = 0 ; i < framen ; i++) { 
+        fprintf(stdout, "Time = %i\n",i) ; 
+        //Loop through hydrogen bonding waters in each frame 
+        for (int j = 0 ; j<mol[i].size() ; j++){
+            //Find out if mol was in previous frame
+            bool previous = false ; 
+            //Loop through all mols in previous frame to see if this mol was in last frame
+            if (i>0) { //If first frame, must be new mol
+                for (int k = 0 ; k < mol[i-1].size() ; k++) {
+                    if(mol[i-1][k].resid == mol[i][j].resid ) {
+                    //    previous mol      ==     this mol 
+                        previous = true ; 
+                        fprintf(stdout, "\t\tFound in previous frame\n") ; 
+                        break ; 
+                    }
+                }
+            }
+            //If a new residue, then find out how long it lasts
+            if (! previous) {
+                fprintf(stdout, "\t\tNew residue") ; 
+                int persFrames = 0 ;  //counter for number of persistent frames
+                int k = i+1 ;  //Start with the next frame
+                bool persistant = true ; 
+                while (persistant && k < framen ) {
+                    persistant = false ; 
+                    for (int l = 0 ; l < mol[k].size() ; l++) {
+                        fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resid) ; 
+                        //if it matches a residue in the next frame it's persistant
+                        if(mol[k][l].resid == mol[i][j].resid) {
+                            persistant = true ; 
+                            persFrames++ ; 
+                        } 
+                    }
+                    k++ ; 
+                }
+                fprintf(stdout, "  Persistant for %i frames\n",persFrames) ; 
+                time_persistant[persFrames]++ ; 
+            }
+        } //end mols
     }
-    //fprintf(stdout, "\n") ; 
-    return 0; 
+    return 0 ; 
 }
 
-int parse_Hs(const float *a1, const float *a2, const float *donor, const float *h1, const float &r, t_mol &mol)
+bool parse_Hs(const float *a1, const float *a2, const float *donor, 
+    const float *h1, 
+    t_cutoffs cutoffs, t_mol &mol)
 {
     float v1 = vlen(a2,h1);
-    //float t1 = 0, t2 = 0, d = 0;
-    if (v1 <= r ) 
-    {
+    if (v1 <= cutoffs.cr ) { 
         //Only one hydrogen - donor length to consider
         mol.nh = v1;
         mol.cnh = vangle(a1,a2,h1);
         mol.nho = vangle(a2,h1,donor);
-        return 1;
+        if (mol.nh < cutoffs.r && mol.cnh > cutoffs.cnh && mol.nho > cutoffs.nho ) { 
+            mol.is_hb++ ;           //true 
+        } 
+        return true;
     }
-    return 0;
+    return false;
 }
 
-int parse_Hs(const float *a1, const float *a2, const float *donor, const float *h1, const float *h2, const float &r, t_mol &mol)
+bool parse_Hs(const float *a1, const float *a2, const float *donor, 
+    const float *h1, const float *h2, 
+    t_cutoffs cutoffs, t_mol &mol)
 {
     float v1 = vlen(a2,h1);
     float v2 = vlen(a2,h2);
-    //float t1 = 0, t2 = 0, d = 0;
-    if (v1 <= r || v2 <= r) 
+
+    if (v1 <= cutoffs.r || v2 <= cutoffs.r) 
     {
-        if (v1 < v2) //v1 is the smallest 
-        {
+        if (v1 < v2) {             //v1 is the smallest 
             mol.nh = v1;
             mol.cnh = vangle(a1,a2,h1);
             mol.nho = vangle(a2,h1,donor);
         }
-        else //v2 is the smallest
-        {
+        else {                     //v2 is the smallest
             mol.nh = v2;
             mol.cnh = vangle(a1,a2,h2);
             mol.nho = vangle(a2,h2,donor);
         }
-        return 1;
+        if (mol.nh < cutoffs.r && mol.cnh > cutoffs.cnh && mol.nho > cutoffs.nho ) { 
+            mol.is_hb++ ;          //true 
+        } 
+        return true;
     }
-    return 0;
+    return false;
 }
 
-int parse_Hs(const float *a1, const float *a2, const float *donor, const float *h1, const float *h2, const float *h3, const float &r, t_mol &mol)
+bool parse_Hs(const float *a1, const float *a2, const float *donor, 
+    const float *h1, const float *h2, const float *h3, 
+    t_cutoffs cutoffs, t_mol &mol)
 {
     float v1 = vlen(a2,h1);
     float v2 = vlen(a2,h2);
     float v3 = vlen(a2,h3);
-    //float t1 = 0, t2 = 0, d = 0;
-    if (v1 <= r || v2 <= r || v3 <=r)
-    {
-        if (v1 < v2 && v1 < v3) //v1 is the smallest 
-        {
+
+    if (v1 <= cutoffs.cr || v2 <= cutoffs.cr || v3 <= cutoffs.cr) { 
+        if (v1 < v2 && v1 < v3) {  //v1 is the smallest 
             mol.nh = v1;
             mol.cnh = vangle(a1,a2,h1);
             mol.nho = vangle(a2,h1,donor);
         }
-        else if (v2 < v3 && v2 < v1) //v2 is the smallest
-        {
+        else if (v2 < v3) {        //v2 is the smallest
             mol.nh = v2;
             mol.cnh = vangle(a1,a2,h2);
             mol.nho = vangle(a2,h2,donor);
         }
-        else //v3 is the smallest
-        {
+        else {                     //v3 is the smallest
             mol.nh = v2;
             mol.cnh = vangle(a1,a2,h2);
             mol.nho = vangle(a2,h2,donor);
         }
-        return 1;
+        if (mol.nh < cutoffs.r && mol.cnh > cutoffs.cnh && mol.nho > cutoffs.nho) {
+            mol.is_hb++ ;          //true 
+        } 
+        return true;
     }
-    return 0;
+    return false;
 }
 
 void vsub( const float *a1, const float *a2, const int &size, float *d )
@@ -380,10 +512,10 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     d.a1        = -1;
     d.a2        = -1;
     d.bVerbose  = false;
-    d.cr        = 0.30;
-    d.r         = 0.205 + (2*0.02);
-    d.cnh       = 145 - (2*23);
-    d.nho       = 156 - (2*18);
+    d.cutoffs.cr        = 0.30;
+    d.cutoffs.r         = 0.205 + (2*0.02);
+    d.cutoffs.cnh       = 145 - (2*23);
+    d.cutoffs.nho       = 156 - (2*18);
     d.nhb       = 0;
     
     t_pargs         pa[] = {
@@ -392,13 +524,13 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         { "-a2", TRUE, etINT,
             {&d.a2}, "Ending atom for bond vector--ie: NE in CNC"},
         { "-NHO_cutoff", FALSE, etREAL,
-            {&d.nho}, "Minimum N-H-O bond angle to count as a hydorgen bond (degrees)"},
+            {&d.cutoffs.nho}, "Minimum N-H-O bond angle to count as a hydorgen bond (degrees)"},
         { "-CNH_cutoff", FALSE, etREAL,
-            {&d.cnh}, "Minimum N-H-O bond angle to count as a hydorgen bond (degrees)"},
+            {&d.cutoffs.cnh}, "Minimum N-H-O bond angle to count as a hydorgen bond (degrees)"},
         { "-angle_NH_cutoff", FALSE, etREAL,
-            {&d.r}, "Minimum N-H bond distance to count as a hydrogen bond include angle criteria (nm)"},
+            {&d.cutoffs.r}, "Minimum N-H bond distance to count as a hydrogen bond include angle criteria (nm)"},
         { "-distance_NH_cutoff", FALSE, etREAL,
-            {&d.cr}, "Minimum N-H bond distance to count as a hydrogen bond with only distance criteria (nm)"},
+            {&d.cutoffs.cr}, "Minimum N-H bond distance to count as a hydrogen bond with only distance criteria (nm)"},
         { "-v", FALSE, etBOOL,
             {&d.bVerbose}, "Be slightly more verbose"}
     };
@@ -408,10 +540,9 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         ,{ efXVG, "-op", "persistent", ffWRITE }
         ,{ efXVG, "-oa", "hb_count", ffWRITE }
         ,{ efXVG, "-or", "geometry", ffWRITE }
-//        ,{ efXVG, "-onw", "nw_frame_hb", ffWRITE }
         ,{ efXVG, "-onwr", "nw_geometry", ffWRITE }
     };
-    d.doLog = false, d.doPersistent = false, d.doGeo = false;
+    d.doLog = false, d.doPersistent = false, d.doWatGeo = false, d.doProtGeo = false ;
     
 #define NFILE asize(fnm)
     
@@ -436,50 +567,39 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     gmx_ana_get_anagrps(trj, &sel);
     gmx_ana_init_coverfrac(trj, CFRAC_SOLIDANGLE);
     
-    /* open xvg file */
+    /* open xvg files */
     d.fp = NULL;
     d.fp = xvgropen(opt2fn("-o", NFILE, fnm), "Trajectory Hydrogen Bonds","Step", "Number of Water Molecules", oenv);
     const char * legend[] = {   "Frame Number",
                                 "Nearby Water Molecules",
                                 "Le Questel HBonded Water Molecules",
                                 "Cho Sigma HBonded Water Molecules",
-                                "Cho Pi HBonded Water Molecules"
-                                , "Protein hydrogen bonds"
+                                "Cho Pi HBonded Water Molecules", 
+                                "Protein hydrogen bonds", 
+                                "Total hydrogen bonds (LQ and protein)"
                             };
     xvgr_legend(d.fp,asize(legend),legend,oenv);
-    
-    d.fpp = NULL;
-    if (opt2bSet("-op", NFILE, fnm))
-    {
-        d.doPersistent = true;
-        const char *flegend[] = {   "Persistent Water Molecules",
-                                    "Persistent Hydrogen Bonds",
-                                    "Persistent Hydrogen Bonds From Protein
-                                    "Total Persistent Water Molecules",
-                                    "Total Persistent Hydrogen Bonds",
-                                    "Total Persistent Hydrogen Bonds From Protein"
-                                };
-        d.fpp = xvgropen(opt2fn("-op", NFILE, fnm), "Persistent Waters and Hydrogen Bonds", "Number of Frames", "Number Water Molecules", oenv);
-        xvgr_legend(d.fpp,asize(flegend), flegend, oenv);
-    }
-    
+
     d.fpa = NULL;
     if (opt2bSet("-oa", NFILE, fnm))
     {
         d.doLog = true;
-        const char *alegend[] = {   "N Hydrogen Bonds",
-                                    "Number of Frames (Le Questel Hydrogen Bonds)",
-                                    "Number of Frames (Cho Sigma Hydrogen Bonds)",
-                                    "Number of Frames (Cho Pi Hydrogen Bonds)"
-                                    ,"Number of Frames (Protein H-bonds)"
+        const char *alegend[] = {   "Number of each type per frame",
+                                    "Number of Frames (Nearby Water Molecules)",
+                                    "Number of Frames (Le Questel HBonded Water Molecules)",
+                                    "Number of Frames (Cho Sigma HBonded Water Molecules)",
+                                    "Number of Frames (Cho Pi HBonded Water Molecules)", 
+                                    "Number of Frames (Protein hydrogen bonds)", 
+                                    "Number of Frames (Total hydrogen bonds (LQ and protein))"
                                 };
-        d.fpa = xvgropen(opt2fn("-oa", NFILE, fnm), "Frames with types of hydrogen bonds", "Number of Hydrogen Bonds", "Number of Frames", oenv);
+        d.fpa = xvgropen(opt2fn("-oa", NFILE, fnm), "Number of Frames with different numbers of Hydrogen Bonds", "Number of frames", "Number of Frames", oenv);
         xvgr_legend(d.fpa,asize(alegend),alegend,oenv);
     }
+
     d.fpg = NULL;
     if (opt2bSet("-or", NFILE, fnm))
     {
-        d.doGeo = true;
+        d.doWatGeo = true;
         const char *glegend[] = {   "Frame",
                                     "Water Index",
                                     "NH Distance (Angstrom)",
@@ -489,20 +609,12 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         d.fpg = xvgropen(opt2fn("-or", NFILE, fnm), "Hydrogen Bonding Geometry", "Step", "Geometry", oenv);
         xvgr_legend(d.fpg,asize(glegend), glegend, oenv);
     }
-    /*Protein hbonding files*/ 
-    //d.fpnw = NULL;
-    //d.fpnw = xvgropen(opt2fn("-onw", NFILE, fnm), "Trajectory Hydrogen Bonds","Step", "Number of Protein HBonds", oenv);
-    //const char * nwlegend[] = {   "Frame Number",
-    //                            "Nearby Hydrogen donors",
-    //                            "Hydrogen bonded molecules" 
-    //                        };
-    //xvgr_legend(d.fpnw,asize(nwlegend),nwlegend,oenv);
 
     d.fpnwg = NULL;
     if (opt2bSet("-onwr", NFILE, fnm))
     {
-        d.doGeo = true;
-        const char *nwglegend[] = {   "Frame",
+        d.doProtGeo = true;
+        const char *nwglegend[] = { "Frame",
                                     "Residue Index",
                                     "NH Distance (Angstrom)",
                                     "X - Acceptor - H Angle (CNH Angle) (Degrees)",
@@ -511,6 +623,23 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         d.fpnwg = xvgropen(opt2fn("-onwr", NFILE, fnm), "Hydrogen Bonding Geometry", "Step", "Geometry", oenv);
         xvgr_legend(d.fpnwg,asize(nwglegend), nwglegend, oenv);
     }
+    
+    d.fpp = NULL;
+    if (opt2bSet("-op", NFILE, fnm))
+    {
+        d.doPersistent = true;
+        const char *flegend[] = {   "Persistent Water Molecules",
+                                    "Persistent Hydrogen Bonds",
+                                    "Persistent Hydrogen Bonds From Protein",
+                                    "Total Persistent Water Molecules",
+                                    "Total Persistent Hydrogen Bonds",
+                                    "Total Persistent Hydrogen Bonds From Protein"
+                                };
+        d.fpp = xvgropen(opt2fn("-op", NFILE, fnm), "Persistent Waters and Hydrogen Bonds", "Number of Frames", "Number Water Molecules", oenv);
+        xvgr_legend(d.fpp,asize(flegend), flegend, oenv);
+    }
+    
+
     
     /* Make sure -a1 and -a2 are included and increment by -1 to match internal numbering */
     if ( d.a1<0 || d.a2<0 ) {
@@ -530,193 +659,14 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     gmx_ana_do(trj, 0, &analyze_frame, &d);
     
     /* Now we analyze the water information */
-    int maxhb = 5;
-    maxhb++;
-    std::vector<int> frames_with_lQ (maxhb,0);
-    std::vector<int> frames_with_sigma (maxhb,0);
-    std::vector<int> frames_with_pi (maxhb,0);
-    std::vector<int> frames_with_prot (maxhb,0);
-    for (int i=0; i<d.framen; i++) {
-        /* Print off information about each frame */
-        fprintf(d.fp,"%10i %10i %10i %10i %10i %10i\n",i,d.water[i].size(), d.frame_lQ_nhb[i], d.frame_sigma_nhb[i], d.frame_pi_nhb[i], d.frame_prot_nhb[i]);
-        /* Find information about the number of frames with different numbers of Hbonds */
-        if (d.doLog)
-        {
-            for (int j=0; j<maxhb; j++)
-            {
-                if (d.frame_lQ_nhb[i] == j)
-                {
-                    frames_with_lQ[j] ++;
-                }
-                if (d.frame_sigma_nhb[i] == j)
-                {
-                    frames_with_sigma[j] ++;
-                }
-                if (d.frame_pi_nhb[i] == j)
-                {
-                    frames_with_pi[j] ++;
-                }
-                if (d.frame_prot_nhb[i] == j)
-                {
-                    frames_with_prot[j] ++;
-                }
-            }
-        }
-    }
+    analyze_information(&d) ; 
+
     ffclose(d.fp);
-    /* Write information about the number of frames with different numbers of Hbonds */
-    if (d.doLog)
-    {
-        for (int i=0;i<maxhb;i++)
-        {
-            fprintf(d.fpa,"%10i %10i %10i %10i %10i\n",i,frames_with_lQ[i],frames_with_sigma[i],frames_with_pi[i],frames_with_prot[i]);
-        }
-        ffclose(d.fpa);
-    }
-    /* Get information about persistant water and hydrogen bonds */
-    if (d.doPersistent) {
-        fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
-        std::vector<int> persistant_water (d.framen,0);
-        std::vector<int> persistant_hb (d.framen,0);
-        std::vector<int> persistant_prothb (d.framen,0);
-        fprintf(stdout, "\n\t\t\t\td.framen = %i\n\n",d.framen) ; 
-        for (int i=0; i<d.framen; i++) {//for each frame
-            fprintf(stdout, "Time = %i\n",i) ; 
-            //fprintf(stdout, "(int) d.water[i].size() = %i\n", d.water[i].size() ) ;
-            for (int j=0 ; j<(int) d.water[i].size() ; j++) {//for each water in current frame
-                bool in_previous_frame = false;
-                if (i>0) {
-                    for (int k=0; k<d.water[i-1].size(); k++) { //for each water in previous frame
-                        if (d.water[i][j].resid == d.water[i-1][k].resid) { //check if same water in last frame
-                            in_previous_frame = true;
-                            //fprintf(stdout, "\tPersistent water found\t%i\n",d.water[i][j].resid) ; 
-                            break;
-                        }
-                    }
-                }
-                if (! in_previous_frame) {//each time a new water is found
-                    //fprintf(stdout, "\tNew water found %i\n",d.water[i][j].resid) ; 
-                    int k = i+1; //index of next frame
-                    int npersist = 0;
-                    int nhb = 0;
-                    bool persistant = true;
-                    //fprintf(stdout,"\t\tChecking frame:") ; 
-                    while (persistant && k < d.framen) {//while still persistent and not end of file
-                        //fprintf(stdout,"  %i",k) ; 
-                        persistant = false;
-                        for (int l=0 ; l<int(d.water[k].size()) ; l++) {//for each water in next frame
-                            if (d.water[i][j].resid == d.water[k][l].resid) {//if water is also found in next frame
-                                //fprintf(stdout,"  Found") ; 
-                                persistant = true;
-                                npersist++;
-                                if (d.water[i][j].is_hb && d.water[k][l].is_hb) {
-                                    nhb++;
-                                    //fprintf(stdout, "This one is hbonding too!") ; 
-                                }
-                                break;//found. move on to next frame
-                            }
-                        }
-                        k++;
-                    }
-                    persistant_water[npersist]++; 
-                    //persistant_hb[nhb]++;
-                    //fprintf(stdout,"\n\t\tPersistent for %i frames.\n",npersist) ; 
-                }
-            }
-            //fprintf(stdout,"\n\tExitting water sucessfully\n")  ; 
-            //Now do the same thing for protein hbonds
-            //fprintf(stdout, "prot.size() = %i\n",d.prot.size() ) ; 
-            fprintf(stdout, "prot[i].size() = %i\n",d.prot[i].size() ) ; 
-            for (int j=0 ; j<(int) d.prot[i].size() ; j++) {//for each nearby prot reisude in current frame
-                fprintf(stdout, "Checking: %i \n",d.prot[i][j].resid) ; 
-                if (d.prot[i][j].is_hb) {
-                    fprintf(stdout, "\tHbond residue found!\n") ; 
-                    bool in_previous_frame = false;//find out if it was in previous frame
-                    if (i>0) {
-                        for (int k=0; k<d.prot[i-1].size(); k++) { //for each residue in previous frame
-                            if(d.prot[i-1][j].is_hb) {
-                                if (d.prot[i][j].resid == d.prot[i-1][k].resid) { //check if same residue in last frame
-                                    in_previous_frame = true;
-                                    fprintf(stdout, "\tPersistent residue found\t%i\n",d.prot[i][j].resid) ; 
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (! in_previous_frame) {//each time a new residue is found
-                        fprintf(stdout, "\tNew residue found %i\n",d.prot[i][j].resid) ; 
-                        int k = i+1; //index of next frame
-                        int npersist = 0;
-                        bool persistant = true;
-                        fprintf(stdout,"\t\tChecking frame:") ; 
-                        while (persistant && k < d.framen) {//while still persistent and not end of file
-                            fprintf(stdout,"  %i",k) ; 
-                            persistant = false;
-                            for (int l=0 ; l<int(d.prot[k].size()) ; l++) {//for each residue in next frame
-                                if (d.prot[i][j].resid == d.prot[k][l].resid) {//if resiude is also found in next frame
-                                    fprintf(stdout,"  Found") ; 
-                                    persistant = true;
-                                    npersist++;
-                                    break;//found. move on to next frame
-                                }
-                            }
-                            k++;
-                        }
-                        //persistant_water[npersist]++; 
-                        persistant_prothb[npersist]++;
-                        fprintf(stdout,"\n\t\tPersistent for %i frames.\n",npersist) ; 
-                    }
-                }
-            }    
-        }
-
-        std::vector<int> total_water (d.framen,0);
-        std::vector<int> total_hb (d.framen,0);
-        std::vector<int> total_prothb (d.framen,0);
-        for (int i=0; i<d.framen; i++) {
-            for (int j=i; j<d.framen; j++) {
-                total_water[i] += persistant_water[j];
-                total_hb[i] += persistant_hb[j];
-                total_prothb[i] += persistant_prothb[j] ; 
-            }
-        }
-        /* Write to xvg file */
-        for (int i=0; i<d.framen;i++){
-            fprintf(d.fpp,"%10i %10i %10i %10i %10i %10i %10i\n",i,persistant_water[i],persistant_hb[i],persistant_prothb[i],total_water[i], total_hb[i],total_prothb[i]);
-        }
-        ffclose(d.fpp);
-    }
-
-    /* Now we analyze the protein informations */ 
-    for (int i=0; i<d.framen; i++) {
-        /* Find information about the number of frames with different numbers of Hbonds */
-        if (d.doLog)
-        {
-            for (int j=0; j<maxhb; j++)
-            {
-                if (d.frame_lQ_nhb[i] == j)
-                {
-                    frames_with_lQ[j] ++;
-                }
-                if (d.frame_sigma_nhb[i] == j)
-                {
-                    frames_with_sigma[j] ++;
-                }
-                if (d.frame_pi_nhb[i] == j)
-                {
-                    frames_with_pi[j] ++;
-                }
-                if (d.frame_prot_nhb[i] == j)
-                {
-                    frames_with_prot[j] ++;
-                }
-            }
-        }
-    }
-    //ffclose(d.fpnw);
-
+    ffclose(d.fpa);
+    ffclose(d.fpp);
     ffclose(d.fpg); 
-    ffclose(d.fpnwg); //Close geometry files 
+    ffclose(d.fpnwg); //Close all files 
+    return 0 ; 
 }
 
 
