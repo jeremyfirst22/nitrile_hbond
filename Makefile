@@ -45,7 +45,7 @@ test:
 	bash test.sh 
 
 clobber:
-	rm -f $(wildcard *.o) 
+	rm -f $(wildcard *.o) $(wildcard *.xvg)
 
 #clean up rule
 clean:
