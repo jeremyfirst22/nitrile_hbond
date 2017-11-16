@@ -87,7 +87,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
                             totnhb++;                 //counter for all hydrogen bonds
                             lQ_nhb++;                 //specifically water hydrogen bonds
                             water_hb.push_back(mol) ; //add to water hbond array
-                            fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, atom_ndx) ; 
+                            //fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, atom_ndx) ; 
                         }
                         if (mol.cnh >= 120.) {        //Cho hbonds - only a distance requirement 
                             sigma_nhb++;              //Decide if these are sigma or pi 
@@ -171,8 +171,8 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
     d->frame_pi_nhb.push_back(pi_nhb);
     d->frame_prot_nhb.push_back(prot_nhb) ;
     d->frame_totnhb.push_back(totnhb) ;
-    fprintf(stdout, "\n\t\tFrame = %i Total hbonds = %i Prot = %i \n",d->framen,totnhb,prot_nhb) ; 
-    fprintf(stdout, "\t\t\tLQ Water = %i Sigma = %i Pi = %i\n\n", lQ_nhb,sigma_nhb, pi_nhb) ; 
+    //fprintf(stdout, "\n\t\tFrame = %i Total hbonds = %i Prot = %i \n",d->framen,totnhb,prot_nhb) ; 
+    //fprintf(stdout, "\t\t\tLQ Water = %i Sigma = %i Pi = %i\n\n", lQ_nhb,sigma_nhb, pi_nhb) ; 
     /* increment the frame number */
     d->framen++;
     /* We need to return 0 to tell that everything went OK */
@@ -202,17 +202,17 @@ int analyze_information(void *data) {
     std::vector<int> total_hb (d->framen,0);
     std::vector<int> total_prothb (d->framen,0);
 
-    fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    //fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
     for (int i = 0 ; i < persistant_water.size() ; i++){
-        fprintf(stdout, "%i  ",persistant_water[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_water[i]) ; 
     }
-    fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+    //fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
     for (int i = 0 ; i < persistant_hb.size() ; i++){
-        fprintf(stdout, "%i  ",persistant_hb[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
     }
-    fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    //fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
     for (int i = 0 ; i < persistant_prothb.size() ; i++) {
-        fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
     }
 
     //Print number hbond information for each frame to a file
@@ -281,8 +281,8 @@ int analyze_information(void *data) {
 
     d->doPersistent = true ; 
     if (d->doPersistent) {
-        fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
-        fprintf(stdout, "\n\t\t\t\td->framen = %i\n\n",d->framen) ; 
+        //fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
+        //fprintf(stdout, "\n\t\t\t\td->framen = %i\n\n",d->framen) ; 
 
         count_persistant(d->water, d->framen, persistant_water) ; 
         count_persistant(d->water_hb,d->framen,persistant_hb) ; 
@@ -290,17 +290,17 @@ int analyze_information(void *data) {
 
         
     }
-    fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    //fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
     for (int i = 0 ; i < persistant_water.size() ; i++){
-        fprintf(stdout, "%i  ",persistant_water[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_water[i]) ; 
     }
-    fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+    //fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
     for (int i = 0 ; i < persistant_hb.size() ; i++){
-        fprintf(stdout, "%i  ",persistant_hb[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
     }
     fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
     for (int i = 0 ; i < persistant_prothb.size() ; i++) {
-        fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
+        //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
     }
     //Accumulate how lifetimes
     for (int i=0; i<d->framen; i++) {
@@ -318,9 +318,9 @@ int analyze_information(void *data) {
 }
 
 int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int>& time_persistant){
-    fprintf(stdout, "\n***Array size = %i***\n\n",mol.size() ) ; 
+    //fprintf(stdout, "\n***Array size = %i***\n\n",mol.size() ) ; 
     for (int i = 0 ; i < framen ; i++) { 
-        fprintf(stdout, "Time = %i\n",i) ; 
+        //fprintf(stdout, "Time = %i\n",i) ; 
         //Loop through hydrogen bonding waters in each frame 
         for (int j = 0 ; j<mol[i].size() ; j++){
             //Find out if mol was in previous frame
@@ -331,21 +331,21 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
                     if(mol[i-1][k].resid == mol[i][j].resid ) {
                     //    previous mol      ==     this mol 
                         previous = true ; 
-                        fprintf(stdout, "\t\tFound in previous frame\n") ; 
+                        //fprintf(stdout, "\t\tFound in previous frame\n") ; 
                         break ; 
                     }
                 }
             }
             //If a new residue, then find out how long it lasts
             if (! previous) {
-                fprintf(stdout, "\t\tNew residue") ; 
+                //fprintf(stdout, "\t\tNew residue") ; 
                 int persFrames = 0 ;  //counter for number of persistent frames
                 int k = i+1 ;  //Start with the next frame
                 bool persistant = true ; 
                 while (persistant && k < framen ) {
                     persistant = false ; 
                     for (int l = 0 ; l < mol[k].size() ; l++) {
-                        fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resid) ; 
+                        //fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resid) ; 
                         //if it matches a residue in the next frame it's persistant
                         if(mol[k][l].resid == mol[i][j].resid) {
                             persistant = true ; 
@@ -354,7 +354,7 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
                     }
                     k++ ; 
                 }
-                fprintf(stdout, "  Persistant for %i frames\n",persFrames) ; 
+                //fprintf(stdout, "  Persistant for %i frames\n",persFrames) ; 
                 time_persistant[persFrames]++ ; 
             }
         } //end mols
