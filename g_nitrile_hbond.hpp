@@ -34,11 +34,12 @@ extern "C"
 
 struct t_mol
 {
-    int resid;   //residue index 
-    bool is_hb;  //is it hydrogen bonding
-    float nh;    //Donor - Hydrogen distance   (N:--H) 
-    float cnh;   //X - Acceptor - Hydrogen i   (C=N:--H) 
-    float nho;   //Acceptor - Hydrogen - Donor (N:--H-O) 
+    //int resid;     // internal Gromacs residue index 
+    int resNumber; // residue Number that is printed on topolgy, VMD, .gro files, etc. 
+    bool is_hb;    // is it hydrogen bonding
+    float nh;      // Donor - Hydrogen distance   (N:--H) 
+    float cnh;     // X - Acceptor - Hydrogen i   (C=N:--H) 
+    float nho;     // Acceptor - Hydrogen - Donor (N:--H-O) 
 };
 
 typedef std::vector<t_mol> t_water;

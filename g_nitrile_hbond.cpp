@@ -54,6 +54,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
     float a2[3] = { fr->x[d->a2][0], fr->x[d->a2][1], fr->x[d->a2][2] };
     int atom_ndx ; 
     int resid ; 
+    int resNumber ; 
     char* resname ; 
     char* atomname ; 
     t_mol mol;                                        //create mol object 
@@ -65,17 +66,21 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
         }
         for (int i = 0; i < sel[g]->p.nr; ++i) {      // for each atom in the group
             mol.is_hb = false ; 
-            mol.resid = resid ; 
+            //mol.resid = resid ; 
 
             atom_ndx = sel[g]->g->index[i];           // how we get to the atom index
-            resid = top->atoms.atom[atom_ndx].resind; // increment by +1 to match gro file
+            resid = top->atoms.atom[atom_ndx].resind; // internal residue index 
+            resNumber = top->atoms.resinfo[resid].nr ;
             resname = *top->atoms.resinfo[resid].name;
             atomname = *top->atoms.atomname[atom_ndx];
             char elem = atomname[0] ; 
 
+            mol.resNumber = resNumber ; 
+
             //Water molecules must be either of SOL of HOH 
             if (strncmp(resname, "SOL", 4) == 0 || strncmp(resname, "HOH", 4) == 0) { 
                 if (strncmp(atomname, "OW", 3) == 0) { 
+                    //fprintf(stdout, "\nresid: %i resname: %s atomname: %s atom_ndx: %i\n", resid, resname, atomname, atom_ndx) ; 
                     //Get coords of water atoms
                     float OW[3] = { fr->x[atom_ndx][0], fr->x[atom_ndx][1], fr->x[atom_ndx][2] };
                     float H1[3] = { fr->x[atom_ndx+1][0], fr->x[atom_ndx+1][1], fr->x[atom_ndx+1][2] };
@@ -88,6 +93,8 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
                             lQ_nhb++;                 //specifically water hydrogen bonds
                             water_hb.push_back(mol) ; //add to water hbond array
                             //fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, atom_ndx) ; 
+                            //fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, resid) ; 
+                            //fprintf(stdout, "\n\tFrame: %i  Water %i is hbonding\n",d->framen, resNumber) ; 
                         }
                         if (mol.cnh >= 120.) {        //Cho hbonds - only a distance requirement 
                             sigma_nhb++;              //Decide if these are sigma or pi 
@@ -104,7 +111,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
             else { 
                 //Any N, O, S, or CG on Met are the allowed donors as of now. 
                 if (elem == 'N' || elem == 'O' || elem == 'S' || (strncmp(atomname,"CG",3) == 0 && strncmp(resname,"MET",3) == 0 ) ) { 
-    //                fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resid) ; 
+    //                fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resNumber) ; 
                     //fprintf(stdout, "\t\t atom_ndx = %i\n",atom_ndx) ; 
 
                     //Coords of Hbond donor  
@@ -156,7 +163,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
                         totnhb++;                 //counter for all hydrogen bonds
                         prot_nhb++ ;              //specifically protein hydrogen bonds
                         prot.push_back(mol) ;     //add to protein hbond array
-                        //fprintf(stdout, "\n\tFrame: %i  Residue %i is hbonding. Donor is %s\n",d->framen, resid,atomname) ; 
+                        //fprintf(stdout, "\n\tFrame: %i  Residue %i is hbonding. Donor is %s\n",d->framen, resNumber,atomname) ; 
                     }
                 }
             }
@@ -261,7 +268,7 @@ int analyze_information(void *data) {
             //For each molecule in each frame
             for (int j = 0 ; j < d->water_hb[i].size() ; j++) {
                 //Print to file 
-                fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->water_hb[i][j].resid,10*d->water_hb[i][j].nh,d->water_hb[i][j].cnh,d->water_hb[i][j].nho) ; 
+                fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->water_hb[i][j].resNumber,10*d->water_hb[i][j].nh,d->water_hb[i][j].cnh,d->water_hb[i][j].nho) ; 
             }
         }
     }
@@ -274,7 +281,7 @@ int analyze_information(void *data) {
             //For each molecule in each frame
             for (int j = 0 ; j < d->prot[i].size() ; j++) {
                 //Print to file 
-                fprintf(d->fpnwg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->prot[i][j].resid,10*d->prot[i][j].nh,d->prot[i][j].cnh,d->prot[i][j].nho) ; 
+                fprintf(d->fpnwg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->prot[i][j].resNumber,10*d->prot[i][j].nh,d->prot[i][j].cnh,d->prot[i][j].nho) ; 
             }
         }
     }
@@ -328,7 +335,7 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
             //Loop through all mols in previous frame to see if this mol was in last frame
             if (i>0) { //If first frame, must be new mol
                 for (int k = 0 ; k < mol[i-1].size() ; k++) {
-                    if(mol[i-1][k].resid == mol[i][j].resid ) {
+                    if(mol[i-1][k].resNumber == mol[i][j].resNumber ) {
                     //    previous mol      ==     this mol 
                         previous = true ; 
                         //fprintf(stdout, "\t\tFound in previous frame\n") ; 
@@ -345,9 +352,9 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
                 while (persistant && k < framen ) {
                     persistant = false ; 
                     for (int l = 0 ; l < mol[k].size() ; l++) {
-                        //fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resid) ; 
+                        //fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resNumber) ; 
                         //if it matches a residue in the next frame it's persistant
-                        if(mol[k][l].resid == mol[i][j].resid) {
+                        if(mol[k][l].resNumber == mol[i][j].resNumber) {
                             persistant = true ; 
                             persFrames++ ; 
                         } 
