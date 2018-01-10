@@ -68,8 +68,10 @@ typedef struct
     FILE                                *fpg;                   //File (write) pointer to water hbonding geometry. 
     FILE                                *fpnwg;                 //File (write) pointer to non-water hbonding geometry   
 
-    int                                 framen;                 //counter to count the number of frames analyzed. 
     int                                 a1, a2;                 //indices of C and N, respectively, for nitrile
+    int                                 forgivenessLevel;       //Number of frames a hdyrogen bond may be absent but still considered persistent
+
+    int                                 framen;                 //counter to count the number of frames analyzed. 
     int                                 nhb;                    //counter of total number of hbonds 
     int                                 nwater;                 //counter of number of hbonds to water
     int                                 nprot ;                 //counter of number of hbonds to protein 
@@ -134,11 +136,12 @@ bool parse_Hs(const float *a1, const float *a2, const float *ow,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Purpose:    Considers an array of molecules, and counts number of times a molecule appears in consecutive frames (persistantly).        //
 //            Count the frequency of a molecule appearing persistantly as a function of time.                                             //
+//            Molecules are still considered persistent if they are only missing for a number of frames less than the forgiveness level   //
 //Arguents:   Accepts an array of molecule structs, and integer of how many frames are available, and an integer vector by reference.     //
 //Returns :   Returns 0 if successful. Integer array by reference is modified to contain the number of times a molecule was persistent    //
 //            for that amount of time, at each index of the array                                                                         //  
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int> &persistant) ; 
+int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int> &persistant, int forgivenessLevel) ; 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

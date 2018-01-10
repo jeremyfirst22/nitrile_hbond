@@ -291,9 +291,9 @@ int analyze_information(void *data) {
         //fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
         //fprintf(stdout, "\n\t\t\t\td->framen = %i\n\n",d->framen) ; 
 
-        count_persistant(d->water, d->framen, persistant_water) ; 
-        count_persistant(d->water_hb,d->framen,persistant_hb) ; 
-        count_persistant(d->prot,d->framen,persistant_prothb) ; 
+        count_persistant(d->water, d->framen, persistant_water,d->forgivenessLevel) ; 
+        count_persistant(d->water_hb,d->framen,persistant_hb,d->forgivenessLevel) ; 
+        count_persistant(d->prot,d->framen,persistant_prothb,d->forgivenessLevel) ; 
 
         
     }
@@ -305,7 +305,7 @@ int analyze_information(void *data) {
     for (int i = 0 ; i < persistant_hb.size() ; i++){
         //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
     }
-    fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    //fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
     for (int i = 0 ; i < persistant_prothb.size() ; i++) {
         //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
     }
@@ -324,7 +324,7 @@ int analyze_information(void *data) {
     return 0 ; 
 }
 
-int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int>& time_persistant){
+int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vector<int>& time_persistant, int forgivenessLevel){
     //fprintf(stdout, "\n***Array size = %i***\n\n",mol.size() ) ; 
     for (int i = 0 ; i < framen ; i++) { 
         //fprintf(stdout, "Time = %i\n",i) ; 
@@ -334,18 +334,26 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
             bool previous = false ; 
             //Loop through all mols in previous frame to see if this mol was in last frame
             if (i>0) { //If first frame, must be new mol
-                for (int k = 0 ; k < mol[i-1].size() ; k++) {
-                    if(mol[i-1][k].resNumber == mol[i][j].resNumber ) {
-                    //    previous mol      ==     this mol 
-                        previous = true ; 
-                        //fprintf(stdout, "\t\tFound in previous frame\n") ; 
-                        break ; 
+                int f = 0 ; 
+                do {
+                    //if (f+1 > i) {
+                    //fprintf(stdout, "\tSearching %i frames back\n", f+1) ; 
+                    //fprintf(stdout, "\t\tChecking %i molecules: ",mol[i-f-1].size() ) ; 
+                    for (int k = 0 ; k < mol[i-f-1].size() ; k++) {
+                        //fprintf(stdout, "%i... ",k+1) ; 
+                        if(mol[i-f-1][k].resNumber == mol[i][j].resNumber ) {
+                            previous = true ; 
+                            //fprintf(stdout, "\t\tFound %i frames back\n",f+1) ; 
+                            break ; 
+                        }
                     }
-                }
+                    //fprintf(stdout, "\n") ; 
+                    f++ ; 
+                } while (f <= forgivenessLevel && !previous && i-f-1 > 0) ; 
             }
             //If a new residue, then find out how long it lasts
             if (! previous) {
-                //fprintf(stdout, "\t\tNew residue") ; 
+                //fprintf(stdout, "\tNew residue") ; 
                 int persFrames = 0 ;  //counter for number of persistent frames
                 int k = i+1 ;  //Start with the next frame
                 bool persistant = true ; 
@@ -358,6 +366,23 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
                             persistant = true ; 
                             persFrames++ ; 
                         } 
+                    }
+                    if ( ! persistant ) { //if not found in next frame, check "forgivable frames" 
+                        //fprintf(stdout, "\n\t\tk=%i Residue not found, checking next frames\n",k) ; 
+                        int f = 1 ; 
+                        while ( ! persistant && f <= forgivenessLevel ) {
+                            //fprintf(stdout, "\t\t\tChecking k= %i",k+f) ; 
+                            for (int l = 0 ; l < mol[k+f].size() ; l++) {
+                                if(mol[k+f][l].resNumber == mol[i][j].resNumber) {
+                                    //fprintf(stdout, "  Residue found, so k= %i is persistant\n",k) ; 
+                                    persistant=true ; 
+                                    persFrames+= 1 ; 
+                                    break ; 
+                                }
+                            }
+                            //fprintf(stdout, "\n") ; 
+                            f++ ; 
+                        } ; 
                     }
                     k++ ; 
                 }
@@ -518,6 +543,7 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     t_analysisdata      d;
     d.a1        = -1;
     d.a2        = -1;
+    d.forgivenessLevel = 0 ; 
     d.bVerbose  = false;
     d.cutoffs.cr        = 0.30;
     d.cutoffs.r         = 0.205 + (2*0.02);
@@ -530,6 +556,8 @@ int gmx_nitrile_hbond(int argc, char *argv[])
             {&d.a1}, "Starting atom for bond vector--ie: CD in CNC"},
         { "-a2", TRUE, etINT,
             {&d.a2}, "Ending atom for bond vector--ie: NE in CNC"},
+        { "-forgiveness", FALSE, etINT, 
+            {&d.forgivenessLevel}, "Forgiveness level for persistancy of hydrogen bonds (number of frames)"},
         { "-NHO_cutoff", FALSE, etREAL,
             {&d.cutoffs.nho}, "Minimum N-H-O bond angle to count as a hydorgen bond (degrees)"},
         { "-CNH_cutoff", FALSE, etREAL,

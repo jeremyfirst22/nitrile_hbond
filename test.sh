@@ -17,6 +17,7 @@ time ./g_nitrile_hbond -f examples/prot.xtc \
     -s examples/v4.tpr \
     -a1 $c \
     -a2 $n \
+    -forgiveness 5 \
     -select "not resname CNF and (same residue as within 0.5 of resname CNF and name NH)" \
     -o -oa -or -onwr -op #-e 1000
 
