@@ -336,8 +336,7 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
             if (i>0) { //If first frame, must be new mol
                 int f = 0 ; 
                 do {
-                    //if (f+1 > i) {
-                    //fprintf(stdout, "\tSearching %i frames back\n", f+1) ; 
+                    //fprintf(stdout, "\tSearching %i frames back (k = %i)\n", f+1, i-f-1) ; 
                     //fprintf(stdout, "\t\tChecking %i molecules: ",mol[i-f-1].size() ) ; 
                     for (int k = 0 ; k < mol[i-f-1].size() ; k++) {
                         //fprintf(stdout, "%i... ",k+1) ; 
@@ -352,41 +351,48 @@ int count_persistant(std::vector<std::vector<t_mol> > mol, int framen, std::vect
                 } while (f <= forgivenessLevel && !previous && i-f-1 > 0) ; 
             }
             //If a new residue, then find out how long it lasts
-            if (! previous) {
-                //fprintf(stdout, "\tNew residue") ; 
-                int persFrames = 0 ;  //counter for number of persistent frames
-                int k = i+1 ;  //Start with the next frame
-                bool persistant = true ; 
-                while (persistant && k < framen ) {
+            if (! previous) { 
+                //fprintf(stdout, "\tNew residue: %i\n", mol[i][j].resNumber) ; 
+                int persFrames = 0 ; //counter for number of persistent frames
+
+                //fprintf(stdout, "\t\tChecking:\n") ; 
+                bool persistant = true  ; 
+                int k = 0 ; 
+                while (persistant && i+k+1 < framen ) { 
+                    //fprintf(stdout, "\t\t    t=%i ",i+1+k) ; 
                     persistant = false ; 
-                    for (int l = 0 ; l < mol[k].size() ; l++) {
-                        //fprintf(stdout, " k= %i res.= %i ", k,mol[k][l].resNumber) ; 
-                        //if it matches a residue in the next frame it's persistant
-                        if(mol[k][l].resNumber == mol[i][j].resNumber) {
+                    for (int l = 0 ; l < mol[i+k+1].size() ; l++) {
+                        //fprintf(stdout, " k= %i res.= %i ", k, mol[k][l].resNumber) ; 
+                        if(mol[i+k+1][l].resNumber == mol[i][j].resNumber ) {
+                            //fprintf(stdout, " Found\n")  ; 
                             persistant = true ; 
                             persFrames++ ; 
-                        } 
+                            break ; 
+                        }
                     }
-                    if ( ! persistant ) { //if not found in next frame, check "forgivable frames" 
-                        //fprintf(stdout, "\n\t\tk=%i Residue not found, checking next frames\n",k) ; 
-                        int f = 1 ; 
-                        while ( ! persistant && f <= forgivenessLevel ) {
-                            //fprintf(stdout, "\t\t\tChecking k= %i",k+f) ; 
-                            for (int l = 0 ; l < mol[k+f].size() ; l++) {
-                                if(mol[k+f][l].resNumber == mol[i][j].resNumber) {
-                                    //fprintf(stdout, "  Residue found, so k= %i is persistant\n",k) ; 
-                                    persistant=true ; 
-                                    persFrames+= 1 ; 
+                    if ( ! persistant ) {
+                        //fprintf(stdout, "not found\n") ; 
+                        for (int f = 1 ; f <= forgivenessLevel && i+k+f+1 < framen; f++) {
+                            //fprintf(stdout, "\t\t\tChecking f level: %i ",f) ;  
+                            for (int l = 0 ; l < mol[i+k+f+1].size() ; l++) {
+                                if(mol[i+k+f+1][l].resNumber == mol[i][j].resNumber ) {
+                                    //fprintf(stdout, "found\n") ; 
+                                    persistant = true ; 
+                                    persFrames++ ; 
                                     break ; 
                                 }
                             }
-                            //fprintf(stdout, "\n") ; 
-                            f++ ; 
-                        } ; 
-                    }
+                            if (persistant) break ; 
+                            //else fprintf(stdout, "not found\n") ; 
+                        } 
+                        if(!persistant ) {
+                            //fprintf(stdout, "\t\t\tOut of tries. Not persistant.\n") ; 
+                        }
+                    } 
                     k++ ; 
-                }
-                //fprintf(stdout, "  Persistant for %i frames\n",persFrames) ; 
+                }   
+                //fprintf(stdout, "\n") ; 
+                //fprintf(stdout, "\t\t\tPersistant for %i frames\n",persFrames) ; 
                 time_persistant[persFrames]++ ; 
             }
         } //end mols
