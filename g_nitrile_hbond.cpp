@@ -110,7 +110,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
             }
             else { 
                 //Any N, O, S, or CG on Met are the allowed donors as of now. 
-                if (elem == 'N' || elem == 'O' || elem == 'S' || (strncmp(atomname,"CG",3) == 0 && strncmp(resname,"MET",3) == 0 ) ) { 
+                if (elem == 'N' || elem == 'O' || elem == 'S' || strncmp(atomname, "CA",3) == 0) { 
     //                fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resNumber) ; 
                     //fprintf(stdout, "\t\t atom_ndx = %i\n",atom_ndx) ; 
 
