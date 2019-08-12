@@ -39,7 +39,7 @@ $(NAME): $(OBJS)
 	$(CC) $(LDFLAGS) $(CPPFLAGS) -o $@ $^
 
 %.o: %.cpp
-	$(CC) $(LDFLAGS) $(CPPFLAGS) -R/usr/local/gromacs/lib -c $<
+	$(CC) $(LDFLAGS) $(CPPFLAGS) -Wl,-path=/usr/local/gromacs/lib -c $<
 
 test:
 	bash test.sh 
