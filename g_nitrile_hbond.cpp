@@ -209,18 +209,18 @@ int analyze_information(void *data) {
     std::vector<int> total_hb (d->framen,0);
     std::vector<int> total_prothb (d->framen,0);
 
-    //fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    /*fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
     for (int i = 0 ; i < persistant_water.size() ; i++){
-        //fprintf(stdout, "%i  ",persistant_water[i]) ; 
-    }
-    //fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+        fprintf(stdout, "%i  ",persistant_water[i]) ; 
+    }*/
+    /*fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
     for (int i = 0 ; i < persistant_hb.size() ; i++){
         //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
-    }
-    //fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    }*/
+    /*fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
     for (int i = 0 ; i < persistant_prothb.size() ; i++) {
         //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
-    }
+    }*/
 
     //Print number hbond information for each frame to a file
     //    Default = frame_hb.xvg 
@@ -286,7 +286,6 @@ int analyze_information(void *data) {
         }
     }
 
-    d->doPersistent = true ; 
     if (d->doPersistent) {
         //fprintf(stdout, "\n\n\t\t***Now getting persistent water information.***\n") ; 
         //fprintf(stdout, "\n\t\t\t\td->framen = %i\n\n",d->framen) ; 
@@ -294,33 +293,33 @@ int analyze_information(void *data) {
         count_persistant(d->water, d->framen, persistant_water,d->forgivenessLevel) ; 
         count_persistant(d->water_hb,d->framen,persistant_hb,d->forgivenessLevel) ; 
         count_persistant(d->prot,d->framen,persistant_prothb,d->forgivenessLevel) ; 
-
-        
-    }
-    //fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
-    for (int i = 0 ; i < persistant_water.size() ; i++){
-        //fprintf(stdout, "%i  ",persistant_water[i]) ; 
-    }
-    //fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
-    for (int i = 0 ; i < persistant_hb.size() ; i++){
-        //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
-    }
-    //fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
-    for (int i = 0 ; i < persistant_prothb.size() ; i++) {
-        //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
-    }
-    //Accumulate how lifetimes
-    for (int i=0; i<d->framen; i++) {
-        for (int j=i; j<d->framen; j++) {
-            total_water[i] += persistant_water[j];
-            total_hb[i] += persistant_hb[j];
-            total_prothb[i] += persistant_prothb[j] ; 
+          
+        //Accumulate how lifetimes
+        for (int i=0; i<d->framen; i++) {
+            for (int j=i; j<d->framen; j++) {
+                total_water[i] += persistant_water[j];
+                total_hb[i] += persistant_hb[j];
+                total_prothb[i] += persistant_prothb[j] ; 
+            }
+        // Write to xvg file   
+        for (int i=0; i<d->framen;i++){
+            fprintf(d->fpp,"%10i %10i %10i %10i %10i %10i %10i\n",i,persistant_water[i],persistant_hb[i],persistant_prothb[i],total_water[i], total_hb[i],total_prothb[i]);
+            }
         }
     }
-    // Write to xvg file   
-    for (int i=0; i<d->framen;i++){
-        fprintf(d->fpp,"%10i %10i %10i %10i %10i %10i %10i\n",i,persistant_water[i],persistant_hb[i],persistant_prothb[i],total_water[i], total_hb[i],total_prothb[i]);
-    }
+
+    /*fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
+    for (int i = 0 ; i < persistant_water.size() ; i++){
+        fprintf(stdout, "%i  ",persistant_water[i]) ; 
+    }*/
+    /*fprintf(stdout, "\nPersist hb:     %i  ",persistant_hb.size()) ; 
+    for (int i = 0 ; i < persistant_hb.size() ; i++){
+        //fprintf(stdout, "%i  ",persistant_hb[i]) ; 
+    }*/
+    /*fprintf(stdout, "\nPersist prot:   %i  ",persistant_prothb.size()) ;
+    for (int i = 0 ; i < persistant_prothb.size() ; i++) {
+        //fprintf(stdout, "%i  ",persistant_prothb[i]) ; 
+    }*/
     return 0 ; 
 }
 
@@ -513,7 +512,6 @@ float vangle(const float *a1, const float *a2, const float *a3)
     return RAD2DEG(acos(d));
 }
 
-
 /*! \brief
  * Function that implements the analysis tool.
  *
@@ -680,8 +678,6 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         xvgr_legend(d.fpp,asize(flegend), flegend, oenv);
     }
     
-
-    
     /* Make sure -a1 and -a2 are included and increment by -1 to match internal numbering */
     if ( d.a1<0 || d.a2<0 ) {
         gmx_fatal(FARGS, "\nAtom numbers -a1 and -a2 defining the bond vector must be specified\n");
@@ -702,14 +698,26 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     /* Now we analyze the water information */
     analyze_information(&d) ; 
 
-    ffclose(d.fp);
-    ffclose(d.fpa);
-    ffclose(d.fpp);
-    ffclose(d.fpg); 
-    ffclose(d.fpnwg); //Close all files 
+    if (d.bVerbose ) {
+        fprintf(stderr, "Finished with analysis. Now closing all files\n") ; 
+    }
+
+    ffclose(d.fp); //This output file is automatically opened. Must close. 
+
+    if (d.doLog) {
+        ffclose(d.fpa);
+    }
+    if (d.doPersistent) {
+        ffclose(d.fpp);
+    }
+    if (d.doWatGeo) {
+        ffclose(d.fpg); 
+    }
+    if (d.doProtGeo) {
+        ffclose(d.fpnwg); //Close all optional output files 
+    }
     return 0 ; 
 }
-
 
 
 /*! \brief
