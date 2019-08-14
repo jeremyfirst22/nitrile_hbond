@@ -181,7 +181,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
     //fprintf(stdout, "\n\t\tFrame = %i Total hbonds = %i Prot = %i \n",d->framen,totnhb,prot_nhb) ; 
     //fprintf(stdout, "\t\t\tLQ Water = %i Sigma = %i Pi = %i\n\n", lQ_nhb,sigma_nhb, pi_nhb) ; 
     /* increment the frame number */
-    d->framen++;
+    d->framen++; 
     /* We need to return 0 to tell that everything went OK */
     return 0;
 }
@@ -227,6 +227,7 @@ int analyze_information(void *data) {
     for (int i=0; i<d->framen; i++) {
         fprintf(d->fp,"%10i %10i %10i %10i %10i %10i %10i\n",i,d->water[i].size(), d->frame_lQ_nhb[i], d->frame_sigma_nhb[i], d->frame_pi_nhb[i], d->frame_prot_nhb[i], d->frame_totnhb[i]); 
     }  
+    if (d->bVerbose) fprintf(stderr, "Finished printing to frame_hb.xvg\n") ; 
 
     //Analyze number of frames with different number of hbonds
     //   Default = hb_count.xvg  
@@ -258,10 +259,11 @@ int analyze_information(void *data) {
         for (int i=0;i<maxhb;i++) {
             fprintf(d->fpa,"%10i %10i %10i %10i %10i %10i %10i\n",i,frames_with_nearbywater[i],frames_with_lQ[i],frames_with_sigma[i],frames_with_pi[i],frames_with_prot[i],frames_with_totnhb[i]);
         }
+    	if (d->bVerbose) fprintf(stderr, "Finished printing to hb_count.xvg\n") ; 
     }
 
     //Analyze Geometry of each hydrogen-bonding water molecule 
-    //   Default = wat_geometry.xvg 
+    //   Default = geometry.xvg 
     if (d->doWatGeo) {
         //For each frame
         for (int i = 0 ; i < d->framen ; i++) { 
@@ -271,10 +273,11 @@ int analyze_information(void *data) {
                 fprintf(d->fpg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->water_hb[i][j].resNumber,10*d->water_hb[i][j].nh,d->water_hb[i][j].cnh,d->water_hb[i][j].nho) ; 
             }
         }
+    	if (d->bVerbose) fprintf(stderr, "Finished printing to geometry.xvg\n") ; 
     }
 
     //Analyze Geometry of each hydrogen-bonding protein residue  
-    //   Default = prot_geometry.xvg 
+    //   Default = nw_geometry.xvg 
     if (d->doProtGeo) {
         //For each frame
         for (int i = 0 ; i < d->framen ; i++) { 
@@ -284,6 +287,7 @@ int analyze_information(void *data) {
                 fprintf(d->fpnwg, "%10i %10i %12.4f %12.4f %12.4f\n",i,d->prot[i][j].resNumber,10*d->prot[i][j].nh,d->prot[i][j].cnh,d->prot[i][j].nho) ; 
             }
         }
+    	if (d->bVerbose) fprintf(stderr, "Finished printing to nw_geometry.xvg\n") ; 
     }
 
     if (d->doPersistent) {
@@ -306,6 +310,7 @@ int analyze_information(void *data) {
             fprintf(d->fpp,"%10i %10i %10i %10i %10i %10i %10i\n",i,persistant_water[i],persistant_hb[i],persistant_prothb[i],total_water[i], total_hb[i],total_prothb[i]);
             }
         }
+    	if (d->bVerbose) fprintf(stderr, "Finished printing to persistent.xvg\n") ; 
     }
 
     /*fprintf(stdout, "\nPersist waters: %i  ",persistant_water.size() ) ; 
@@ -606,6 +611,25 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     gmx_ana_get_anagrps(trj, &sel);
     gmx_ana_init_coverfrac(trj, CFRAC_SOLIDANGLE);
     
+    
+    /* Make sure -a1 and -a2 are included and increment by -1 to match internal numbering */
+    if ( d.a1<0 || d.a2<0 ) {
+        gmx_fatal(FARGS, "\nAtom numbers -a1 and -a2 defining the bond vector must be specified\n");
+    }
+    d.a1--; d.a2--;
+    
+    /* Make sure that -a1 and -a2 exist in the trajectory */
+    if (d.a1<0 || d.a1>top->atoms.nr){
+        gmx_fatal(FARGS, "\nError: Atom -a1 is %d, which is outside of the range 0 to %d\n",d.a1+1,top->atoms.nr+1);
+    }
+    if (d.a2<0 || d.a2>top->atoms.nr){
+        gmx_fatal(FARGS, "\nError: Atom -a2 is %d, which is outside of the range 0 to %d\n",d.a2+1,top->atoms.nr+1);
+    }
+
+    /* Parse through the frames */
+    gmx_ana_do(trj, 0, &analyze_frame, &d);
+    if (d.bVerbose) fprintf(stderr, "Finished parsing through the frames\n") ; 
+
     /* open xvg files */
     d.fp = NULL;
     d.fp = xvgropen(opt2fn("-o", NFILE, fnm), "Trajectory Hydrogen Bonds","Step", "Number of Water Molecules", oenv);
@@ -678,32 +702,11 @@ int gmx_nitrile_hbond(int argc, char *argv[])
         xvgr_legend(d.fpp,asize(flegend), flegend, oenv);
     }
     
-    /* Make sure -a1 and -a2 are included and increment by -1 to match internal numbering */
-    if ( d.a1<0 || d.a2<0 ) {
-        gmx_fatal(FARGS, "\nAtom numbers -a1 and -a2 defining the bond vector must be specified\n");
-    }
-    d.a1--; d.a2--;
-    
-    /* Make sure that -a1 and -a2 exist in the trajectory */
-    if (d.a1<0 || d.a1>top->atoms.nr){
-        gmx_fatal(FARGS, "\nError: Atom -a1 is %d, which is outside of the range 0 to %d\n",d.a1+1,top->atoms.nr+1);
-    }
-    if (d.a2<0 || d.a2>top->atoms.nr){
-        gmx_fatal(FARGS, "\nError: Atom -a2 is %d, which is outside of the range 0 to %d\n",d.a2+1,top->atoms.nr+1);
-    }
-
-    /* Parse through the frames */
-    gmx_ana_do(trj, 0, &analyze_frame, &d);
-    
     /* Now we analyze the water information */
     analyze_information(&d) ; 
-
-    if (d.bVerbose ) {
-        fprintf(stderr, "Finished with analysis. Now closing all files\n") ; 
-    }
+    if (d.bVerbose ) fprintf(stderr, "Finished with analysis.\n") ; 
 
     ffclose(d.fp); //This output file is automatically opened. Must close. 
-
     if (d.doLog) {
         ffclose(d.fpa);
     }
@@ -716,6 +719,8 @@ int gmx_nitrile_hbond(int argc, char *argv[])
     if (d.doProtGeo) {
         ffclose(d.fpnwg); //Close all optional output files 
     }
+    if (d.bVerbose ) fprintf(stderr, "All files now closed.\n") ; 
+
     return 0 ; 
 }
 
