@@ -71,10 +71,10 @@ typedef struct
     int                                 a1, a2;                 //indices of C and N, respectively, for nitrile
     int                                 forgivenessLevel;       //Number of frames a hdyrogen bond may be absent but still considered persistent
 
-    int                                 framen;                 //counter to count the number of frames analyzed. 
-    int                                 nhb;                    //counter of total number of hbonds 
-    int                                 nwater;                 //counter of number of hbonds to water
-    int                                 nprot ;                 //counter of number of hbonds to protein 
+    int                                 framen = 0 ;            //counter to count the number of frames analyzed. 
+    int                                 nhb    = 0 ;            //counter of total number of hbonds 
+    int                                 nwater = 0 ;            //counter of number of hbonds to water
+    int                                 nprot  = 0 ;            //counter of number of hbonds to protein 
 
     std::vector<int>                    p_water;                //number of persistent waters
     std::vector<int>                    p_hbonds;               //number of persistent hbonds from water 
