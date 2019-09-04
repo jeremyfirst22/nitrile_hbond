@@ -77,8 +77,12 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
 
             mol.resNumber = resNumber ; 
 
+            //Ions cannot be hydrogen bond donors. Will need to add other ions as they come up.  
+            if (strncmp(resname, "NA", 4) == 0 || strncmp(resname, "CL", 4) == 0) {
+                continue ; 
+            } 
             //Water molecules must be either of SOL of HOH 
-            if (strncmp(resname, "SOL", 4) == 0 || strncmp(resname, "HOH", 4) == 0) { 
+            else if (strncmp(resname, "SOL", 4) == 0 || strncmp(resname, "HOH", 4) == 0) { 
                 if (strncmp(atomname, "OW", 3) == 0) { 
                     //fprintf(stdout, "\nresid: %i resname: %s atomname: %s atom_ndx: %i\n", resid, resname, atomname, atom_ndx) ; 
                     //Get coords of water atoms
@@ -110,7 +114,7 @@ static int analyze_frame(t_topology *top, t_trxframe *fr, t_pbc *pbc,
             }
             else { 
                 //Any N, O, S, or CG on Met are the allowed donors as of now. 
-                if (elem == 'N' || elem == 'O' || elem == 'S' || strncmp(atomname, "CA",3) == 0) { 
+                if (elem == 'N' || elem == 'O' || elem == 'S' || strncmp(atomname, "CA",3) == 0 ) {
     //                fprintf(stdout,"%s found in group! \t%s\t%i\n",atomname, resname, resNumber) ; 
                     //fprintf(stdout, "\t\t atom_ndx = %i\n",atom_ndx) ; 
 
